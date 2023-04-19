@@ -1,0 +1,11 @@
+{
+    "txtType":".json;.txt;.md;BUILD;.py;.sh;.strings;",
+    "codeType":".c;.swift;.h;.m;.cpp;",
+    "imgType":".png;.pdf;.jpeg;.png;.svg;.scn;",
+    "judgementWords":"",
+    "replaceWords":"",
+    "aCommit":"",
+    "bCommit":"",
+    "localPath":"",
+    "workPath":"",
+}
