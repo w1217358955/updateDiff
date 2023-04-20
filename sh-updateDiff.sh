@@ -71,8 +71,8 @@ function random()
 
 param_pattern="j:r:w:l:a:b:"
 OPTIND=1
-judgementWord="wink;"
-replaceWord="NG;"
+judgementWord="judgement;"
+replaceWord="replace;"
 
 config=$(cat sh-config.json | sed -r 's/",/"/' | egrep -v '^[{}]' | sed 's/"//g' | sed 's/:/=/1' | sed -r 's/ //g')
 declare $config
@@ -162,7 +162,7 @@ localPath=$(pwd)
 if [ "$(git diff HEAD)" == "" ];then
     echo "本地仓库无修改"
 else
-    echo "本地仓库有修改, 是否退出自行处理? (y/n)"
+    echo "本地仓库有修改, 是否退出自行处理? (y/n) \n y 退出脚本 \n n 脚本将仓库记录还原到HEAD状态"
     read confirmation
     if [ "$confirmation" == "y" ]; then
         exit
@@ -197,6 +197,7 @@ diffContent=$(cat $dicPath/diff.txt | tr "\n" ";")
 IFS=';' read -ra diffs <<< "$diffContent"
 
 fileNumber=0
+unCheckNumber=0
 for item in "${diffs[@]}";
 do
     file="$item"
@@ -256,6 +257,7 @@ do
             cp $localPath/"$file" $fileDic/本地文件.$fileExtension
             echo $file | tee -a $fileDic/diff.txt
             log "复制双文件到 "$fileDic
+            ((unCheckNumber++))
             continue
         fi
         if [[ "$fileType" == "code" || "$fileType" == "txt" ]];
@@ -283,6 +285,7 @@ do
                     echo $file | tee -a $fileDic/path.txt
                     git diff $aCommit $bCommit -- ./$file | tee -a $fileDic/diff.txt
                     log "复制双文件到 "$fileDic
+                    ((unCheckNumber++))
                     hasJudgement=true
                     break
                 fi
@@ -313,6 +316,7 @@ do
                     echo $file | tee -a $fileDic/path.txt
                     git diff $aCommit $bCommit -- ./$file | tee -a $fileDic/diff.txt
                     log "复制双文件到 "$fileDic
+                    ((unCheckNumber++))
                     hasReplace=true
                     break
                 fi
@@ -322,7 +326,13 @@ do
             fi
             cp $workPath/"$file" $localPath/"$file"
             log "复制文件 "$workPath/"$file"
+            log "到 "$localPath/"$file"
         fi
     fi
 done
+
+log "\n"
+echo "脚本运行结束:"
+log " 共处理文件数量: "$fileNumber
+log " 待整理文件数量: "$unCheckNumber
 
