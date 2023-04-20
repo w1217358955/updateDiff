@@ -56,6 +56,23 @@ function getType()
     return
 }
 
+function copyCommand()
+{
+    echo "#!/bin/sh\nset -e\n $mainPath/sh-quickCopy.sh -p $1" | tee -a $fileDic/copy.command
+    chmod a+x $fileDic/copy.command
+}
+
+function codeCommand()
+{
+    echo "#!/bin/sh\nset -e\n code --diff $fileDic/本地文件* $fileDic/替换文件*" | tee -a $fileDic/openVScodeDiff.command
+    chmod a+x $fileDic/openVScodeDiff.command
+}
+
+function buildJson()
+{
+    echo "{\n\"name\":\"$1\",\n\"workPath\":\"$2\",\n\"localPath\":\"$3\",\n\"path\":\"$4\",\n}" | tee -a $fileDic/path.json
+}
+
 function log()
 {
     echo $1 | tee -a $dicPath/log.txt
@@ -152,8 +169,8 @@ echo $mainPath
 log "工作目录 "$workPath
 log "本地目录 "$localPath
 
-if [ ! -d $workPath/.git ];then
-    echo "工作目录缺少git配置"
+if [[ ! -d $workPath/.git || ! -d $localPath/.git ]];then
+    echo "本地库或工作库缺少git配置"
     exit 2
 fi
 
@@ -258,8 +275,9 @@ do
             fi
             cp $workPath/"$file" $fileDic/替换文件.$fileExtension
             cp $localPath/"$file" $fileDic/本地文件.$fileExtension
-            echo $file | tee -a $fileDic/diff.txt
+            buildJson $fileName $workPath/"$file" $localPath/"$file" $file
             log "复制双文件到 "$fileDic
+            copyCommand $fileDic
             ((unCheckNumber++))
             continue
         fi
@@ -288,9 +306,11 @@ do
                     log "本地文件命中规避词 "$judgementWord | tee -a $fileDic/diff.txt
                     cp $workPath/"$file" $fileDic/替换文件.$fileExtension
                     cp $localPath/"$file" $fileDic/本地文件.$fileExtension
-                    echo $file | tee -a $fileDic/path.txt
+                    buildJson $fileName $workPath/"$file" $localPath/"$file" $file
                     git diff $aCommit $bCommit -- ./$file | tee -a $fileDic/diff.txt
                     log "复制双文件到 "$fileDic
+                    copyCommand $fileDic
+                    codeCommand $fileExtension
                     ((unCheckNumber++))
                     hasJudgement=true
                     break
@@ -322,9 +342,11 @@ do
                     log "替换文件命中替换词 "$replaceWord | tee -a $fileDic/diff.txt
                     cp $workPath/"$file" $fileDic/替换文件.$fileExtension
                     cp $localPath/"$file" $fileDic/本地文件.$fileExtension
-                    echo $file | tee -a $fileDic/path.txt
+                    buildJson $fileName $workPath/"$file" $localPath/"$file" $file
                     git diff $aCommit $bCommit -- ./$file | tee -a $fileDic/diff.txt
                     log "复制双文件到 "$fileDic
+                    copyCommand $fileDic
+                    codeCommand $fileExtension
                     ((unCheckNumber++))
                     hasReplace=true
                     break
