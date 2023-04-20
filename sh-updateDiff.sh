@@ -71,8 +71,8 @@ function random()
 
 param_pattern="j:r:w:l:a:b:"
 OPTIND=1
-judgementWord="judgement;"
-replaceWord="replace;"
+judgementWord=";"
+replaceWord=";"
 
 config=$(cat sh-config.json | sed -r 's/",/"/' | egrep -v '^[{}]' | sed 's/"//g' | sed 's/:/=/1' | sed -r 's/ //g')
 declare $config
@@ -180,19 +180,21 @@ workPath=$(pwd)
 git clean -df
 git checkout $bCommit
 
+log "需规避单词 "
 IFS=';' read -ra judgementWords <<< "$judgementWord"
 for i in "${judgementWords[@]}"
 do
-    log "需规避单词 ""$i"
+    log " $i"
 done
 
+log "需替换单词 "
 IFS=';' read -ra replaceWords <<< "$replaceWord"
 for i in "${replaceWords[@]}"
 do
-    log "需替换单词 ""$i"
+    log " $i"
 done
 
-git diff "7efdb553bd" "e336323ab3" --name-only > $dicPath/diff.txt
+git diff $aCommit $bCommit --name-only > $dicPath/diff.txt
 diffContent=$(cat $dicPath/diff.txt | tr "\n" ";")
 IFS=';' read -ra diffs <<< "$diffContent"
 
@@ -206,10 +208,10 @@ do
     filePath=$(dirname "$file")
     this_time=$(date +%s%N)
     log "\n[准备替换]: ""$file"
-    log "文件名"$fileName
-    log "后缀"$fileExtension
-    log "文件目录""$filePath"
-    log "时间"$this_time
+    log "文件名 "$fileName
+    log "后缀 "$fileExtension
+    log "文件目录 ""$filePath"
+    log "时间 "$this_time
     ((fileNumber++))
     fileDiff=$(git diff $aCommit $bCommit -- ./$file)
     getType $fileName
@@ -224,7 +226,6 @@ do
     if [[ ! -f $localPath/$file || $fileDiff =~ "new file mode" ]];
     then
         log "[文件 ---> 新增]\n"$localPath/$file
-        log "复制文件 "$localPath/"$file"
         if [ ! -d $localPath/"$filePath" ];
         then
             mkdir -p $localPath/"$filePath"
@@ -236,6 +237,8 @@ do
         else
             cp $workPath/"$file" $localPath/"$file"
         fi
+        log "复制文件 "$workPath/"$file"
+        log "到 "$localPath/"$file"
         continue
     else
         echo "[文件 ---> 修改]" | tee -a $dicPath/log.txt
@@ -265,6 +268,9 @@ do
             hasJudgement=false
             for judgementWord in "${judgementWords[@]}"
             do
+                if [ -z "$judgementWord" ]; then
+                    break
+                fi
                 if [ `grep -c "$judgementWord" $localPath/"$file"` -ne '0' ];
                 then
                     if [ ! -d $dicPath/$fileType ];
@@ -296,6 +302,9 @@ do
             hasReplace=false
             for replaceWord in "${replaceWords[@]}"
             do
+                if [ -z "$replaceWord" ]; then
+                    break
+                fi
                 if [ `grep -c "$replaceWord" $workPath/"$file"` -ne '0' ];
                 then
                     if [ ! -d $dicPath/$fileType ];
