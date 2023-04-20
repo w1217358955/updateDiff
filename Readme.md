@@ -1,4 +1,4 @@
-##脚本运行原理
+# 脚本运行原理
 1. 根据目标git库的更新记录 对本地库进行更新
 2. 查找两个commit之间的diff 遍历diff
 3. 区分文件类型 区分删除/新增/修改
@@ -8,7 +8,7 @@
 7.	文件类型通过后缀判断  具体什么后缀 通过json输入
 8.	此脚本只为便利 复制文件 可能会出现条件不全的时候 会出错  例如将png后缀的文件设置为code 因此需要在脚本跑完后 自行查验本地库git 修改记录 验证修改是否正常
 
-##sh-updateDiff
+## sh-updateDiff
 优先从参数中获取 参数没有则从config.json中获取  
 -j	可选  需要规避的词组 用;号隔开  
 -r	可选  需要替换的词组 用;号隔开    
@@ -16,6 +16,19 @@
 -l	可选  本地库与脚本位置的相对路径  
 -a  可选  git库 较旧的提交id  
 -b  可选  git库 较新的提交id  
+
+## config
+- txtType  
+- codeType   
+- imgType  
+为后缀区分字段  按;分割  带.将会匹配类型 不带.将会匹配文件名  
+
+- judgementWord  同-j  
+- replaceWord  同 -r
+- aCommit 同 -a
+- bCommit 同 -b
+- localPath 同 -l
+- workPath 同 -w
 
 脚本运行时会产生log 放置在脚本目录下的update文件夹
 
