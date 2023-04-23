@@ -2,7 +2,7 @@
 set -e
 function log()
 {
-    echo $1 | tee -a ./update/copy.txt
+    echo $1 | tee -a ./copy.txt
 }
 
 param_pattern="p:"
@@ -48,19 +48,25 @@ while getopts $param_pattern optname
         esac
     done
 
-echo $mainPath
 if [ -z "$mainPath" ];then
     exit 2
 fi
-log "替换地址 "$mainPath
+
+cd $mainPath
+cd ../../
 
 if [[ -z "$mainPath/path.json" ]];then
     echo "路径为空 无法处理!"
     exit 2
 fi
 
-config=$(cat $mainPath/path.json | sed -r 's/",/"/' | egrep -v '^[{}]' | sed 's/"//g' | sed 's/:/=/1' | sed -r 's/ //g')
+config=$(cat $mainPath/path.json | sed -r 's/",/"/' | egrep -v '^[{}]' | sed 's/"//g' | sed 's/:/=/1' | sed -r 's/ /*x*/g')
 declare $config
+
+name=${name//"*x*"/" "}
+localPath=${localPath//"*x*"/" "}
+workPath=${workPath//"*x*"/" "}
+path=${path//"*x*"/" "}
 
 if [[ -z "$localPath" ]];then
     echo "路径为空 无法处理!"
@@ -74,6 +80,7 @@ fi
 
 localfilePath="$(find $mainPath -type f -name 本地*)"
 workfilePath="$(find $mainPath -type f -name 替换*)"
+
 filePath=""
 if [[ ${#localfilePath[@]} > 1 ]];then
     echo "本地文件有多个 无法处理!"
@@ -93,7 +100,7 @@ else
         echo "缺少文件"
         exit 2
     else
-        if [ -f $localfilePath ];then
+        if [[ -f $localfilePath && -n "$localfilePath" ]];then
             filePath=$localfilePath
         else
             filePath=$workfilePath
@@ -102,13 +109,13 @@ else
 fi
 
 log "\n"
-log "文件 $filePath"
-log "复制到 $copyPath"
-log "并删除 $mainPath"
+log "文件:\n $filePath\n"
+log "复制到:\n $localPath\n"
+log "并删除\n $mainPath\n"
 echo "是否复制? (y/n)"
 read confirmation
 if [ "$confirmation" == "y" ]; then
-    cp $filePath $localPath
+    cp "$filePath" "$localPath"
     rm -rf $mainPath
     log "[删除]"
     exit
