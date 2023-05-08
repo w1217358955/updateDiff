@@ -56,6 +56,23 @@ function getType()
     return
 }
 
+function copyCommand()
+{
+    echo "#!/bin/sh\nset -e\n $mainPath/sh-quickCopy.sh -p $1" | tee -a "$fileDic"/copy.command
+    chmod a+x "$fileDic"/copy.command
+}
+
+function codeCommand()
+{
+    echo "#!/bin/sh\nset -e\n code --diff "$fileDic"/本地文件* "$fileDic"/替换文件*" | tee -a "$fileDic"/openVScodeDiff.command
+    chmod a+x "$fileDic"/openVScodeDiff.command
+}
+
+function buildJson()
+{
+    echo "{\n\"name\":\"$1\",\n\"workPath\":\"$2\",\n\"localPath\":\"$3\",\n\"path\":\"$4\",\n}" | tee -a "$fileDic"/path.json
+}
+
 function log()
 {
     echo $1 | tee -a $dicPath/log.txt
@@ -71,8 +88,8 @@ function random()
 
 param_pattern="j:r:w:l:a:b:"
 OPTIND=1
-judgementWord="wink;"
-replaceWord="NG;"
+judgementWord=";"
+replaceWord=";"
 
 config=$(cat sh-config.json | sed -r 's/",/"/' | egrep -v '^[{}]' | sed 's/"//g' | sed 's/:/=/1' | sed -r 's/ //g')
 declare $config
@@ -152,8 +169,8 @@ echo $mainPath
 log "工作目录 "$workPath
 log "本地目录 "$localPath
 
-if [ ! -d $workPath/.git ];then
-    echo "工作目录缺少git配置"
+if [[ ! -d $workPath/.git || ! -d $localPath/.git ]];then
+    echo "本地库或工作库缺少git配置"
     exit 2
 fi
 
@@ -162,7 +179,7 @@ localPath=$(pwd)
 if [ "$(git diff HEAD)" == "" ];then
     echo "本地仓库无修改"
 else
-    echo "本地仓库有修改, 是否退出自行处理? (y/n)"
+    echo "本地仓库有修改, 是否退出自行处理? (y/n) \n y 退出脚本 \n n 脚本将仓库记录还原到HEAD状态"
     read confirmation
     if [ "$confirmation" == "y" ]; then
         exit
@@ -180,38 +197,43 @@ workPath=$(pwd)
 git clean -df
 git checkout $bCommit
 
+log "需规避单词 "
 IFS=';' read -ra judgementWords <<< "$judgementWord"
 for i in "${judgementWords[@]}"
 do
-    log "需规避单词 ""$i"
+    log " $i"
 done
 
+log "需替换单词 "
 IFS=';' read -ra replaceWords <<< "$replaceWord"
 for i in "${replaceWords[@]}"
 do
-    log "需替换单词 ""$i"
+    log " $i"
 done
 
-git diff "7efdb553bd" "e336323ab3" --name-only > $dicPath/diff.txt
+git diff $aCommit $bCommit --name-only > $dicPath/diff.txt
 diffContent=$(cat $dicPath/diff.txt | tr "\n" ";")
 IFS=';' read -ra diffs <<< "$diffContent"
 
 fileNumber=0
+unCheckNumber=0
 for item in "${diffs[@]}";
 do
     file="$item"
-    fileName=${file##*/}
+    temp=${file//" "/"$o$"}
+    fileName=${temp##*/}
+    fileName=${fileName//"$o$"/" "}
     fileExtension=${fileName##*.}
     filePath=$(dirname "$file")
     this_time=$(date +%s%N)
     log "\n[准备替换]: ""$file"
-    log "文件名"$fileName
-    log "后缀"$fileExtension
-    log "文件目录""$filePath"
-    log "时间"$this_time
+    log "文件名 "$fileName
+    log "后缀 "$fileExtension
+    log "文件目录 ""$filePath"
+    log "时间 "$this_time
     ((fileNumber++))
     fileDiff=$(git diff $aCommit $bCommit -- ./$file)
-    getType $fileName
+    getType "$fileName"
     #替换目录没这个文件或者diff告知是删除文件
     if [[ ! -f $workPath/$file || $fileDiff =~ "deleted file mode" ]];
     then
@@ -223,7 +245,6 @@ do
     if [[ ! -f $localPath/$file || $fileDiff =~ "new file mode" ]];
     then
         log "[文件 ---> 新增]\n"$localPath/$file
-        log "复制文件 "$localPath/"$file"
         if [ ! -d $localPath/"$filePath" ];
         then
             mkdir -p $localPath/"$filePath"
@@ -235,6 +256,8 @@ do
         else
             cp $workPath/"$file" $localPath/"$file"
         fi
+        log "复制文件 "$workPath/"$file"
+        log "到 "$localPath/"$file"
         continue
     else
         echo "[文件 ---> 修改]" | tee -a $dicPath/log.txt
@@ -244,18 +267,20 @@ do
             then
                 mkdir $dicPath/$fileType
             fi
-            fileDic=$dicPath/$fileType/$fileName
-            if [ ! -d $fileDic ];
+            fileDic=$dicPath/$fileType/"$fileName"
+            if [ ! -d "$fileDic" ];
             then
-                mkdir $fileDic
+                mkdir "$fileDic"
             else
-                fileDic=$fileDic"_$fileNumber"
+                fileDic="$fileDic""_$fileNumber"
                 mkdir "$fileDic"
             fi
-            cp $workPath/"$file" $fileDic/替换文件.$fileExtension
-            cp $localPath/"$file" $fileDic/本地文件.$fileExtension
-            echo $file | tee -a $fileDic/diff.txt
-            log "复制双文件到 "$fileDic
+            cp $workPath/"$file" "$fileDic"/替换文件.$fileExtension
+            cp $localPath/"$file" "$fileDic"/本地文件.$fileExtension
+            buildJson "$fileName" "$workPath"/"$file" "$localPath"/"$file" "$file"
+            log "复制双文件到 ""$fileDic"
+            copyCommand "$fileDic"
+            ((unCheckNumber++))
             continue
         fi
         if [[ "$fileType" == "code" || "$fileType" == "txt" ]];
@@ -263,6 +288,9 @@ do
             hasJudgement=false
             for judgementWord in "${judgementWords[@]}"
             do
+                if [ -z "$judgementWord" ]; then
+                    break
+                fi
                 if [ `grep -c "$judgementWord" $localPath/"$file"` -ne '0' ];
                 then
                     if [ ! -d $dicPath/$fileType ];
@@ -270,19 +298,22 @@ do
                         mkdir $dicPath/$fileType
                     fi
                     fileDic=$dicPath/$fileType/$fileName
-                    if [ ! -d $fileDic ];
+                    if [ ! -d "$fileDic" ];
                     then
-                        mkdir $fileDic
+                        mkdir "$fileDic"
                     else
-                        fileDic=$fileDic"_$fileNumber"
-                        mkdir $fileDic
+                        fileDic="$fileDic""_$fileNumber"
+                        mkdir "$fileDic"
                     fi
-                    log "本地文件命中规避词 "$judgementWord | tee -a $fileDic/diff.txt
-                    cp $workPath/"$file" $fileDic/替换文件.$fileExtension
-                    cp $localPath/"$file" $fileDic/本地文件.$fileExtension
-                    echo $file | tee -a $fileDic/path.txt
-                    git diff $aCommit $bCommit -- ./$file | tee -a $fileDic/diff.txt
-                    log "复制双文件到 "$fileDic
+                    log "本地文件命中规避词 "$judgementWord | tee -a "$fileDic"/diff.txt
+                    cp $workPath/"$file" "$fileDic"/替换文件.$fileExtension
+                    cp $localPath/"$file" "$fileDic"/本地文件.$fileExtension
+                    buildJson "$fileName" "$workPath"/"$file" "$localPath"/"$file" "$file"
+                    git diff $aCommit $bCommit -- ./$file | tee -a "$fileDic"/diff.txt
+                    log "复制双文件到 ""$fileDic"
+                    copyCommand "$fileDic"
+                    codeCommand $fileExtension
+                    ((unCheckNumber++))
                     hasJudgement=true
                     break
                 fi
@@ -293,6 +324,9 @@ do
             hasReplace=false
             for replaceWord in "${replaceWords[@]}"
             do
+                if [ -z "$replaceWord" ]; then
+                    break
+                fi
                 if [ `grep -c "$replaceWord" $workPath/"$file"` -ne '0' ];
                 then
                     if [ ! -d $dicPath/$fileType ];
@@ -300,19 +334,22 @@ do
                         mkdir $dicPath/$fileType
                     fi
                     fileDic=$dicPath/$fileType/$fileName
-                    if [ ! -d $fileDic ];
+                    if [ ! -d "$fileDic" ];
                     then
-                        mkdir $fileDic
+                        mkdir "$fileDic"
                     else
-                        fileDic=$fileDic"_$fileNumber"
-                        mkdir $fileDic
+                        fileDic="$fileDic""_$fileNumber"
+                        mkdir "$fileDic"
                     fi
-                    log "替换文件命中替换词 "$replaceWord | tee -a $fileDic/diff.txt
-                    cp $workPath/"$file" $fileDic/替换文件.$fileExtension
-                    cp $localPath/"$file" $fileDic/本地文件.$fileExtension
-                    echo $file | tee -a $fileDic/path.txt
-                    git diff $aCommit $bCommit -- ./$file | tee -a $fileDic/diff.txt
-                    log "复制双文件到 "$fileDic
+                    log "替换文件命中替换词 "$replaceWord | tee -a "$fileDic"/diff.txt
+                    cp $workPath/"$file" "$fileDic"/替换文件.$fileExtension
+                    cp $localPath/"$file" "$fileDic"/本地文件.$fileExtension
+                    buildJson "$fileName" "$workPath"/"$file" "$localPath"/"$file" "$file"
+                    git diff $aCommit $bCommit -- ./$file | tee -a "$fileDic"/diff.txt
+                    log "复制双文件到 ""$fileDic"
+                    copyCommand "$fileDic"
+                    codeCommand $fileExtension
+                    ((unCheckNumber++))
                     hasReplace=true
                     break
                 fi
@@ -320,9 +357,15 @@ do
             if [ $hasReplace = true ];then
                 continue
             fi
-            cp $workPath/"$file" $localPath/"$file"
-            log "复制文件 "$workPath/"$file"
+            cp "$workPath"/"$file" "$localPath"/"$file"
+            log "复制文件 ""$workPath"/"$file"
+            log "到 ""$localPath"/"$file"
         fi
     fi
 done
+
+log "\n"
+echo "脚本运行结束:"
+log " 共处理文件数量: "$fileNumber
+log " 待整理文件数量: "$unCheckNumber
 
